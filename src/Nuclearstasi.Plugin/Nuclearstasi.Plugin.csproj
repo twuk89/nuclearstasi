@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>Nuclearstasi</AssemblyName>
+    <RootNamespace>Nuclearstasi.Plugin</RootNamespace>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Nuclearstasi.Core/Nuclearstasi.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp"><HintPath>$(GameLibDir)Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Mirage"><HintPath>$(GameLibDir)Mirage.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UniTask"><HintPath>$(GameLibDir)UniTask.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine"><HintPath>$(GameLibDir)UnityEngine.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(GameLibDir)UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="BepInEx"><HintPath>$(GameLibDir)BepInEx.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(GameLibDir)0Harmony.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
