@@ -35,7 +35,7 @@ namespace Nuclearstasi.Core.Tests
         {
             float regular = Economy.RegularIncomeForPayout(income, players);
             // vanilla DistributeFunds pays regularIncome * players * 0.5
-            Assert.Equal(income, regular * players * 0.5f, 3f);
+            Assert.Equal(income, regular * players * 0.5f, 0.001f);
         }
 
         [Fact]
