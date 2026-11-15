@@ -29,9 +29,7 @@ namespace Nuclearstasi.Plugin.Campaign
         private double autosaveTimer;
         private int consecutiveFailures;
         private int expectedAirbaseCount;
-#pragma warning disable CS0414 // read by the Task 9 airbase-added handler
         private bool applying;
-#pragma warning restore CS0414
 
         public CampaignController(Settings settings, CampaignStore store, ManualLogSource log)
         {
@@ -195,14 +193,41 @@ namespace Nuclearstasi.Plugin.Campaign
             return Messages.Status(Aggression.Value, Aggression.Tier, Territory, funds, State.ElapsedSeconds);
         }
 
-        // Filled in Task 9.
         public void BeforeDistributeFunds(FactionHQ hq)
         {
+            if (!Active || hq != Rebels)
+            {
+                return;
+            }
+            float income = Economy.RebelIncome(Territory.Rebel, settings.Economy);
+            hq.AddFunds(income);
+            hq.regularIncome = Economy.RegularIncomeForPayout(income, hq.factionPlayers.Count);
         }
 
-        // Filled in Task 9.
         public void OnKillReported(FactionHQ reporter, Unit target)
         {
+            if (!Active || applying || reporter != Rebels || target == null || target.NetworkHQ != Occupiers)
+            {
+                return;
+            }
+            AggressionEvent e;
+            if (target is Aircraft)
+            {
+                e = AggressionEvent.AircraftKilled;
+            }
+            else if (target is Building)
+            {
+                e = AggressionEvent.BuildingDestroyed;
+            }
+            else if (target is GroundVehicle || target is Ship)
+            {
+                e = AggressionEvent.GroundUnitKilled;
+            }
+            else
+            {
+                return;
+            }
+            Raise(e, NearCapital(target.transform.position));
         }
 
         private void Activate(Mission mission)
@@ -329,14 +354,50 @@ namespace Nuclearstasi.Plugin.Campaign
             Territory = GameQueries.MeasureTerritory(Rebels, Occupiers, settings.Economy.LargeAirbaseRunwayMetres);
         }
 
-        // Filled in Task 9.
         private void SendReinforcements()
         {
+            Dictionary<string, int> wave = reinforcements.NextWave(Territory.OccupierShare);
+            int total = 0;
+            foreach (KeyValuePair<string, int> entry in wave)
+            {
+                if (Encyclopedia.Lookup.TryGetValue(entry.Key, out UnitDefinition definition))
+                {
+                    Occupiers.AddSupplyUnit(definition, entry.Value);
+                    total += entry.Value;
+                }
+            }
+            log.LogInfo($"Occupier reinforcements: {total} units (occupier share {Territory.OccupierShare:0.00})");
         }
 
-        // Filled in Task 9.
         private void OnRebelAirbaseAdded(Airbase airbase)
         {
+            if (!Active || applying || airbase == null || airbase.AttachedAirbase)
+            {
+                return;
+            }
+            bool nearCapital = NearCapital(airbase.center.position);
+            Raise(AggressionEvent.AirbaseCaptured, nearCapital);
+            GameQueries.CountBuildings(airbase, out int factories, out int depots);
+            for (int i = 0; i < factories + depots; i++)
+            {
+                Raise(AggressionEvent.FactoryOrDepotCaptured, nearCapital);
+            }
+            RefreshTerritory();
+            Announcer.All(Messages.AirbaseCaptured(GameQueries.DisplayName(airbase)));
+            SaveNow();
+        }
+
+        private void Raise(AggressionEvent e, bool nearCapital)
+        {
+            Announce(Aggression.Add(e, nearCapital));
+            State.Aggression = Aggression.Value;
+            log.LogInfo($"Aggression +{e}{(nearCapital ? " (near capital)" : "")} -> {Aggression.Value:0.0} {Messages.TierName(Aggression.Tier)}");
+        }
+
+        private bool NearCapital(Vector3 position)
+        {
+            return Capital != null
+                && Vector3.Distance(position, Capital.center.position) <= settings.Aggression.CapitalRadiusMetres;
         }
 
         private void Announce(TierChange change)
