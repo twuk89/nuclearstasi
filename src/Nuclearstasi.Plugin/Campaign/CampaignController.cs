@@ -12,6 +12,10 @@ namespace Nuclearstasi.Plugin.Campaign
     {
         private const double TerritoryRefreshSeconds = 5;
         private const double AggressionTickSeconds = 10;
+
+        // Finite (not float.MaxValue) so the DEFCON panel maps cleanly; escalation never rises while active.
+        private const float DisabledTacticalThreshold = 1e9f;
+        private const float DisabledStrategicThreshold = 2e9f;
         private const int MaxConsecutiveFailures = 300;
         private const double FailureResetSeconds = 60;
 
@@ -343,8 +347,8 @@ namespace Nuclearstasi.Plugin.Campaign
                 log.LogWarning("MissionManager not available; nuclear weapons not disabled");
                 return;
             }
-            manager.NetworktacticalThreshold = float.MaxValue;
-            manager.NetworkstrategicThreshold = float.MaxValue;
+            manager.NetworktacticalThreshold = DisabledTacticalThreshold;
+            manager.NetworkstrategicThreshold = DisabledStrategicThreshold;
         }
 
         private static int CountAirbases()
