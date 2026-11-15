@@ -78,6 +78,10 @@ namespace Nuclearstasi.Plugin.Game
         {
             factories = 0;
             depots = 0;
+            if (airbase.buildings == null)
+            {
+                return;
+            }
             foreach (Building building in airbase.buildings)
             {
                 if (building == null)

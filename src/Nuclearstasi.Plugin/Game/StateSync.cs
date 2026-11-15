@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Nuclearstasi.Core;
 using NuclearOption.Networking;
@@ -38,47 +39,108 @@ namespace Nuclearstasi.Plugin.Game
         {
             foreach (KeyValuePair<string, string> owner in state.AirbaseOwners)
             {
-                if (!FactionRegistry.airbaseLookup.TryGetValue(owner.Key, out Airbase airbase) || airbase == null)
+                try
                 {
-                    Plugin.Log.LogWarning($"Saved airbase '{owner.Key}' not found in mission; skipped");
-                    continue;
+                    RestoreOwner(owner.Key, owner.Value);
                 }
-                FactionHQ target = string.IsNullOrEmpty(owner.Value) ? null : FactionRegistry.HqFromName(owner.Value);
-                if (airbase.CurrentHQ == target)
+                catch (Exception e)
                 {
-                    continue;
+                    Plugin.Log.LogWarning($"Restoring owner of '{owner.Key}' failed: {e.Message}");
                 }
-                if (target == null)
-                {
-                    ((ICapturable)airbase).OnCapture(null);
-                }
-                else
-                {
-                    airbase.capture.ForceCapture(target);
-                }
-                Plugin.Log.LogInfo($"Restored {GameQueries.DisplayName(airbase)} -> {(target == null ? "neutral" : owner.Value)}");
             }
 
             foreach (KeyValuePair<string, int> warheads in state.Warheads)
             {
-                if (!FactionRegistry.airbaseLookup.TryGetValue(warheads.Key, out Airbase airbase) || airbase == null || !airbase.HasStorage())
+                try
                 {
-                    continue;
+                    RestoreWarheads(warheads.Key, warheads.Value);
                 }
-                int diff = warheads.Value - airbase.GetWarheads();
-                if (diff > 0)
+                catch (Exception e)
                 {
-                    airbase.AddWarheads(diff);
-                }
-                else if (diff < 0)
-                {
-                    airbase.RemoveWarheads(-diff);
+                    Plugin.Log.LogWarning($"Restoring warheads of '{warheads.Key}' failed: {e.Message}");
                 }
             }
 
             ApplySupplies(state, rebels);
             ApplySupplies(state, occupiers);
-            rebels.SetFunds(state.RebelTreasury);
+            try
+            {
+                RestoreFunds(state, rebels);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"Restoring funds '{rebels.faction.factionName}' failed: {e.Message}");
+            }
+        }
+
+        private static void RestoreOwner(string key, string ownerName)
+        {
+            if (!FactionRegistry.airbaseLookup.TryGetValue(key, out Airbase airbase) || airbase == null)
+            {
+                Plugin.Log.LogWarning($"Saved airbase '{key}' not found in mission; skipped");
+                return;
+            }
+            FactionHQ target = null;
+            if (!string.IsNullOrEmpty(ownerName))
+            {
+                target = FactionRegistry.HqFromName(ownerName);
+                if (target == null)
+                {
+                    Plugin.Log.LogWarning($"Owner '{ownerName}' of airbase '{key}' not resolved; skipped");
+                    return;
+                }
+            }
+            if (airbase.CurrentHQ == target)
+            {
+                return;
+            }
+            if (airbase.capture == null)
+            {
+                Plugin.Log.LogWarning($"Airbase '{key}' has no capture component; skipped");
+                return;
+            }
+            if (target == null)
+            {
+                ((ICapturable)airbase).OnCapture(null);
+                // OnCapture(null) leaves the capture balance stale; reset it to the mission's setting.
+                airbase.capture.SetCapturable(airbase.SavedAirbase == null || airbase.SavedAirbase.Capturable);
+            }
+            else
+            {
+                airbase.capture.ForceCapture(target);
+            }
+            Plugin.Log.LogInfo($"Restored {GameQueries.DisplayName(airbase)} -> {(target == null ? "neutral" : ownerName)}");
+        }
+
+        private static void RestoreWarheads(string key, int wanted)
+        {
+            if (!FactionRegistry.airbaseLookup.TryGetValue(key, out Airbase airbase) || airbase == null || !airbase.HasStorage())
+            {
+                return;
+            }
+            int diff = wanted - airbase.GetWarheads();
+            if (diff > 0)
+            {
+                airbase.AddWarheads(diff);
+            }
+            else if (diff < 0)
+            {
+                airbase.RemoveWarheads(-diff);
+            }
+        }
+
+        private static void RestoreFunds(CampaignState state, FactionHQ rebels)
+        {
+            // Players already present hold their personal funds, so exclude them from the pool to avoid double-counting.
+            float allocated = 0f;
+            foreach (Player player in rebels.GetPlayers(false))
+            {
+                if (player != null)
+                {
+                    allocated += player.Allocation;
+                }
+            }
+            rebels.SetFunds(Math.Max(0f, state.RebelTreasury - allocated));
         }
 
         public static Dictionary<string, int> ReadSupplies(FactionHQ hq)
@@ -106,19 +168,31 @@ namespace Nuclearstasi.Plugin.Game
             keys.UnionWith(current.Keys);
             foreach (string key in keys)
             {
-                saved.TryGetValue(key, out int wanted);
-                current.TryGetValue(key, out int have);
-                if (wanted == have)
+                try
                 {
-                    continue;
+                    RestoreSupply(hq, key, saved, current);
                 }
-                if (!Encyclopedia.Lookup.TryGetValue(key, out UnitDefinition definition))
+                catch (Exception e)
                 {
-                    Plugin.Log.LogWarning($"Unknown unit '{key}' in saved supplies; skipped");
-                    continue;
+                    Plugin.Log.LogWarning($"Restoring supply '{key}' failed: {e.Message}");
                 }
-                hq.AddSupplyUnit(definition, wanted - have);
             }
+        }
+
+        private static void RestoreSupply(FactionHQ hq, string key, Dictionary<string, int> saved, Dictionary<string, int> current)
+        {
+            saved.TryGetValue(key, out int wanted);
+            current.TryGetValue(key, out int have);
+            if (wanted == have)
+            {
+                return;
+            }
+            if (!Encyclopedia.Lookup.TryGetValue(key, out UnitDefinition definition))
+            {
+                Plugin.Log.LogWarning($"Unknown unit '{key}' in saved supplies; skipped");
+                return;
+            }
+            hq.ModifyUnitSupply(definition, wanted - have);
         }
     }
 }
