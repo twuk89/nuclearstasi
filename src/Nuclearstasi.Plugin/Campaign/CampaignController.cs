@@ -19,6 +19,7 @@ namespace Nuclearstasi.Plugin.Campaign
         private readonly Settings settings;
         private readonly CampaignStore store;
         private readonly ManualLogSource log;
+        private readonly HashSet<int> countedKills = new HashSet<int>();
 
         private ReinforcementPlanner reinforcements;
         private Mission pendingMission;
@@ -210,6 +211,11 @@ namespace Nuclearstasi.Plugin.Campaign
             {
                 return;
             }
+            int id = target.GetInstanceID();
+            if (!countedKills.Add(id))
+            {
+                return;
+            }
             AggressionEvent e;
             if (target is Aircraft)
             {
@@ -310,6 +316,7 @@ namespace Nuclearstasi.Plugin.Campaign
             Active = false;
             pendingDelay = -1;
             pendingMission = null;
+            countedKills.Clear();
             Rebels = null;
             Occupiers = null;
             Capital = null;
@@ -365,6 +372,10 @@ namespace Nuclearstasi.Plugin.Campaign
                     Occupiers.AddSupplyUnit(definition, entry.Value);
                     total += entry.Value;
                 }
+                else
+                {
+                    log.LogWarning($"Unknown reinforcement unit '{entry.Key}'; skipped");
+                }
             }
             log.LogInfo($"Occupier reinforcements: {total} units (occupier share {Territory.OccupierShare:0.00})");
         }
@@ -375,16 +386,26 @@ namespace Nuclearstasi.Plugin.Campaign
             {
                 return;
             }
-            bool nearCapital = NearCapital(airbase.center.position);
-            Raise(AggressionEvent.AirbaseCaptured, nearCapital);
-            GameQueries.CountBuildings(airbase, out int factories, out int depots);
-            for (int i = 0; i < factories + depots; i++)
+            try
             {
-                Raise(AggressionEvent.FactoryOrDepotCaptured, nearCapital);
+                bool nearCapital = NearCapital(airbase.center.position);
+                Raise(AggressionEvent.AirbaseCaptured, nearCapital);
+                GameQueries.CountBuildings(airbase, out int factories, out int depots);
+                for (int i = 0; i < factories + depots; i++)
+                {
+                    Raise(AggressionEvent.FactoryOrDepotCaptured, nearCapital);
+                }
+                RefreshTerritory();
+                Announcer.All(Messages.AirbaseCaptured(GameQueries.DisplayName(airbase)));
             }
-            RefreshTerritory();
-            Announcer.All(Messages.AirbaseCaptured(GameQueries.DisplayName(airbase)));
-            SaveNow();
+            catch (Exception e)
+            {
+                log.LogError("Airbase capture handling failed: " + e);
+            }
+            finally
+            {
+                SaveNow();
+            }
         }
 
         private void Raise(AggressionEvent e, bool nearCapital)
