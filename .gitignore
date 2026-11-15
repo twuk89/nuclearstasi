@@ -1,0 +1,10 @@
+# Game and BepInEx binaries (copyrighted, never commit)
+lib/
+*.dll
+
+# Build output
+bin/
+obj/
+*.user
+.vs/
+dist/
