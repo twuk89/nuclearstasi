@@ -45,7 +45,22 @@ namespace Nuclearstasi.Plugin
             c.AutosaveIntervalSeconds = cfg.Bind("Campaign", "AutosaveIntervalSeconds", c.AutosaveIntervalSeconds, "Seconds between autosaves").Value;
             c.ApplyDelaySeconds = cfg.Bind("Campaign", "ApplyDelaySeconds", c.ApplyDelaySeconds, "Seconds after mission start before the saved campaign is applied").Value;
 
+            a.DecayIntervalSeconds = ClampMin(a.DecayIntervalSeconds, 1, "Aggression.DecayIntervalSeconds");
+            r.IntervalSeconds = ClampMin(r.IntervalSeconds, 1, "Reinforcements.IntervalSeconds");
+            c.AutosaveIntervalSeconds = ClampMin(c.AutosaveIntervalSeconds, 1, "Campaign.AutosaveIntervalSeconds");
+            c.ApplyDelaySeconds = ClampMin(c.ApplyDelaySeconds, 0, "Campaign.ApplyDelaySeconds");
+
             return s;
+        }
+
+        private static T ClampMin<T>(T value, T min, string name) where T : System.IComparable<T>
+        {
+            if (value.CompareTo(min) >= 0)
+            {
+                return value;
+            }
+            Plugin.Log.LogWarning($"Config {name} = {value} is below the minimum {min}; using {min}");
+            return min;
         }
     }
 }

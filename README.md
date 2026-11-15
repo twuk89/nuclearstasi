@@ -47,9 +47,17 @@ Send `BepInEx/LogOutput.log` after each session.
 7. Capture an enemy airbase → HQ message "Rebels have captured …", aggression +15 (+10 per factory/depot), income rises.
 8. Wait 10 minutes → log `Occupier reinforcements: N units`.
 9. Quit to menu, reload the mission → "campaign resumed"; captured airbase is still yours, aggression and funds restored.
-10. Nuclear escalation messages never appear.
+10. Nuclear escalation messages never appear, and nuclear weapons are not offered in the loadout screen.
 11. A friend without the mod can join and sees the HQ messages.
 12. If the save belongs to a different mission, an HQ message says so and suggests `/ns new`; the campaign stays inactive.
+13. On a resumed campaign the log has no `SPLIT N WARHEADS` line after `Activated:`; on a new campaign it may.
+14. Quitting to menu logs `Campaign saved` before the mission unloads.
+
+## Notes
+
+- Playing the mission from the editor activates the mod and writes the real campaign save.
+- `/ns status` "Rebel funds" shows the faction pool, not players' personal funds.
+- Occupier units placed in the mission at airbases you have captured come back on reload and may contest them until garrisons arrive in a later update.
 
 ## Building
 

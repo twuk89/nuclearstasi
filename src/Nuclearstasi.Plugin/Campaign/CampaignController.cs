@@ -13,6 +13,7 @@ namespace Nuclearstasi.Plugin.Campaign
         private const double TerritoryRefreshSeconds = 5;
         private const double AggressionTickSeconds = 10;
         private const int MaxConsecutiveFailures = 300;
+        private const double FailureResetSeconds = 60;
 
         public static CampaignController Instance;
 
@@ -29,6 +30,7 @@ namespace Nuclearstasi.Plugin.Campaign
         private double reinforcementTimer;
         private double autosaveTimer;
         private int consecutiveFailures;
+        private double cleanSeconds;
         private int expectedAirbaseCount;
         private bool applying;
 
@@ -81,6 +83,16 @@ namespace Nuclearstasi.Plugin.Campaign
             Deactivate();
         }
 
+        /// <summary>Called before Mirage's NetworkServer.Stop unregisters airbases, so the save still sees the whole map.</summary>
+        public void OnServerStopping()
+        {
+            if (Active)
+            {
+                SaveNow();
+                Deactivate();
+            }
+        }
+
         public void OnFactionDestroyed(FactionHQ hq)
         {
             if (Active && (hq == Rebels || hq == Occupiers))
@@ -122,6 +134,11 @@ namespace Nuclearstasi.Plugin.Campaign
             {
                 return;
             }
+            if (!GameQueries.IsServer())
+            {
+                Deactivate();
+                return;
+            }
             if (Rebels == null || Occupiers == null)
             {
                 Deactivate();
@@ -130,10 +147,17 @@ namespace Nuclearstasi.Plugin.Campaign
             try
             {
                 Step(deltaSeconds);
-                consecutiveFailures = 0;
+                // Timer-driven failures recur only every few seconds, so the counter
+                // resets only after a sustained stretch of failure-free ticks.
+                cleanSeconds += deltaSeconds;
+                if (cleanSeconds >= FailureResetSeconds)
+                {
+                    consecutiveFailures = 0;
+                }
             }
             catch (Exception e)
             {
+                cleanSeconds = 0;
                 consecutiveFailures++;
                 if (consecutiveFailures == 1 || consecutiveFailures % MaxConsecutiveFailures == 0)
                 {
@@ -153,13 +177,13 @@ namespace Nuclearstasi.Plugin.Campaign
             {
                 return;
             }
-            if (Rebels == null || Occupiers == null || CountAirbases() < expectedAirbaseCount)
-            {
-                log.LogWarning("Nuclearstasi: scene is unloading; keeping the last good save");
-                return;
-            }
             try
             {
+                if (Rebels == null || Occupiers == null || CountAirbases() < expectedAirbaseCount)
+                {
+                    log.LogWarning("Nuclearstasi: scene is unloading; keeping the last good save");
+                    return;
+                }
                 StateSync.Capture(State, Rebels, Occupiers);
                 State.Aggression = Aggression.Value;
                 store.Save(State);
@@ -257,6 +281,13 @@ namespace Nuclearstasi.Plugin.Campaign
             {
                 log.LogError("Campaign save unreadable: " + load.Error);
                 Announcer.All(Messages.CorruptSave());
+                if (!load.MovedAside)
+                {
+                    log.LogError("Campaign save could not be set aside; staying inactive so it is not overwritten");
+                    Announcer.All("Nuclearstasi: the campaign save is unreadable and could not be set aside; the campaign is paused. Fix or delete BepInEx/config/Nuclearstasi/campaign.json, or use /ns new.");
+                    Deactivate();
+                    return;
+                }
             }
             if (resumed && !string.IsNullOrEmpty(load.State.MissionName)
                 && !string.Equals(load.State.MissionName, mission.Name, StringComparison.OrdinalIgnoreCase))
@@ -271,6 +302,11 @@ namespace Nuclearstasi.Plugin.Campaign
 
             if (resumed)
             {
+                // FactionHQ.ServerSetup adds warheadsInitial ~5 s after setup; the saved
+                // stockpile already includes them, so suppress the delayed top-up.
+                Rebels.warheadsInitial = 0;
+                Occupiers.warheadsInitial = 0;
+                log.LogInfo("Starting warheads suppressed for the resumed campaign");
                 applying = true;
                 try
                 {
@@ -288,14 +324,27 @@ namespace Nuclearstasi.Plugin.Campaign
 
             territoryTimer = aggressionTimer = reinforcementTimer = autosaveTimer = 0;
             consecutiveFailures = 0;
+            cleanSeconds = 0;
             expectedAirbaseCount = CountAirbases();
-            Commands.NsCommand.Register();
+            DisableNukes();
             Active = true;
             RefreshTerritory();
             log.LogInfo($"Activated: rebels={Rebels.faction.factionName}, occupiers={Occupiers.faction.factionName}, "
                 + $"sites={Territory.TotalSites}, rebelShare={Territory.RebelShare:0.00}, resumed={resumed}");
             Announcer.All(resumed ? Messages.CampaignResumed(Aggression.Tier) : Messages.CampaignStarted());
             SaveNow();
+        }
+
+        private void DisableNukes()
+        {
+            MissionManager manager = NetworkSceneSingleton<MissionManager>.i;
+            if (manager == null)
+            {
+                log.LogWarning("MissionManager not available; nuclear weapons not disabled");
+                return;
+            }
+            manager.NetworktacticalThreshold = float.MaxValue;
+            manager.NetworkstrategicThreshold = float.MaxValue;
         }
 
         private static int CountAirbases()
@@ -370,8 +419,15 @@ namespace Nuclearstasi.Plugin.Campaign
             {
                 if (Encyclopedia.Lookup.TryGetValue(entry.Key, out UnitDefinition definition))
                 {
-                    Occupiers.AddSupplyUnit(definition, entry.Value);
-                    total += entry.Value;
+                    try
+                    {
+                        Occupiers.AddSupplyUnit(definition, entry.Value);
+                        total += entry.Value;
+                    }
+                    catch (Exception e)
+                    {
+                        log.LogWarning($"Reinforcement '{entry.Key}' failed: {e.Message}");
+                    }
                 }
                 else
                 {

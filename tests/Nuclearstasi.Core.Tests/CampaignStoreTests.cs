@@ -82,6 +82,15 @@ namespace Nuclearstasi.Core.Tests
         }
 
         [Fact]
+        public void CorruptFileReportsMovedAside()
+        {
+            var store = new CampaignStore(dir);
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(store.SavePath, "{ not json");
+            Assert.True(store.Load().MovedAside);
+        }
+
+        [Fact]
         public void NewerSaveVersionIsTreatedAsCorrupt()
         {
             var store = new CampaignStore(dir);

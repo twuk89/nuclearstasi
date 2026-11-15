@@ -17,6 +17,8 @@ namespace Nuclearstasi.Core
         public LoadOutcome Outcome;
         public CampaignState State;
         public string Error;
+        /// <summary>For Corrupt: true when the bad file was moved to the bad-save path.</summary>
+        public bool MovedAside;
     }
 
     public sealed class CampaignStore
@@ -57,7 +59,7 @@ namespace Nuclearstasi.Core
             {
                 File.Replace(TempPath, SavePath, null);
             }
-            catch (PlatformNotSupportedException)
+            catch (Exception e) when (e is PlatformNotSupportedException || e is IOException)
             {
                 File.Copy(TempPath, SavePath, overwrite: true);
                 File.Delete(TempPath);
@@ -108,16 +110,18 @@ namespace Nuclearstasi.Core
 
         private LoadResult Corrupt(string error)
         {
+            bool moved = false;
             try
             {
                 File.Copy(SavePath, BadPath, overwrite: true);
                 File.Delete(SavePath);
+                moved = true;
             }
             catch (Exception e)
             {
                 error += "; could not move bad save: " + e.Message;
             }
-            return new LoadResult { Outcome = LoadOutcome.Corrupt, Error = error };
+            return new LoadResult { Outcome = LoadOutcome.Corrupt, Error = error, MovedAside = moved };
         }
     }
 }

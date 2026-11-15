@@ -40,6 +40,8 @@ namespace Nuclearstasi.Plugin.Game
         {
             rebels = null;
             occupiers = null;
+            int joinable = 0;
+            int preventJoin = 0;
             foreach (FactionHQ hq in FactionRegistry.GetAllHQs())
             {
                 if (hq == null)
@@ -49,13 +51,15 @@ namespace Nuclearstasi.Plugin.Game
                 if (hq.preventJoin)
                 {
                     occupiers = hq;
+                    preventJoin++;
                 }
                 else
                 {
                     rebels = hq;
+                    joinable++;
                 }
             }
-            return rebels != null && occupiers != null && rebels != occupiers;
+            return joinable == 1 && preventJoin == 1;
         }
 
         public static bool IsLarge(Airbase airbase, float largeRunwayMetres)

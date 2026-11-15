@@ -50,4 +50,23 @@ namespace Nuclearstasi.Plugin.Patches
             }
         }
     }
+
+    [HarmonyPatch(typeof(Mirage.NetworkServer), nameof(Mirage.NetworkServer.Stop))]
+    internal static class NetworkServerStopPatch
+    {
+        private static void Prefix(Mirage.NetworkServer __instance)
+        {
+            try
+            {
+                if (__instance.Active)
+                {
+                    CampaignController.Instance?.OnServerStopping();
+                }
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogError("NetworkServerStopPatch failed: " + e);
+            }
+        }
+    }
 }
