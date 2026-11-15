@@ -78,6 +78,7 @@ namespace Nuclearstasi.Core.Tests
             Assert.NotNull(result.Error);
             Assert.False(File.Exists(store.SavePath));
             Assert.True(File.Exists(store.BadPath));
+            Assert.Equal("{ not json", File.ReadAllText(store.BadPath));
         }
 
         [Fact]
@@ -121,6 +122,38 @@ namespace Nuclearstasi.Core.Tests
             s.Aggression = 77;
             store.Save(s);
             Assert.Equal(77, store.Load().State.Aggression);
+        }
+
+        [Fact]
+        public void SaveLeavesNoTempFile()
+        {
+            var store = new CampaignStore(dir);
+            string tmp = Path.Combine(dir, "campaign.json.tmp");
+            store.Save(Sample());
+            Assert.False(File.Exists(tmp));
+            store.Save(Sample());
+            Assert.False(File.Exists(tmp));
+        }
+
+        [Fact]
+        public void NullDocumentIsCorrupt()
+        {
+            var store = new CampaignStore(dir);
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(store.SavePath, "null");
+            Assert.Equal(LoadOutcome.Corrupt, store.Load().Outcome);
+        }
+
+        [Fact]
+        public void InnerNullsAreReplaced()
+        {
+            var store = new CampaignStore(dir);
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(store.SavePath, "{ \"Version\": 1, \"Supplies\": { \"Occupiers\": null }, \"AirbaseOwners\": { \"a\": null } }");
+            LoadResult result = store.Load();
+            Assert.Equal(LoadOutcome.Loaded, result.Outcome);
+            Assert.Empty(result.State.Supplies["Occupiers"]);
+            Assert.Equal("", result.State.AirbaseOwners["a"]);
         }
     }
 }

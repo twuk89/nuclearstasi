@@ -36,6 +36,14 @@ namespace Nuclearstasi.Core
             if (AirbaseOwners == null) AirbaseOwners = new Dictionary<string, string>();
             if (Warheads == null) Warheads = new Dictionary<string, int>();
             if (Supplies == null) Supplies = new Dictionary<string, Dictionary<string, int>>();
+            foreach (string key in new List<string>(Supplies.Keys))
+            {
+                if (Supplies[key] == null) Supplies[key] = new Dictionary<string, int>();
+            }
+            foreach (string key in new List<string>(AirbaseOwners.Keys))
+            {
+                if (AirbaseOwners[key] == null) AirbaseOwners[key] = "";
+            }
         }
     }
 }
