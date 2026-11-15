@@ -27,6 +27,7 @@ namespace Nuclearstasi.Plugin
             string saveDir = Path.Combine(Paths.ConfigPath, "Nuclearstasi");
             CampaignController.Instance = new CampaignController(settings, new CampaignStore(saveDir), Logger);
             ApplyPatches();
+            Commands.NsCommand.Register();
             Log.LogInfo($"{Name} {Version} loaded (mission prefix '{settings.Campaign.MissionPrefix}', saves in {saveDir})");
         }
 

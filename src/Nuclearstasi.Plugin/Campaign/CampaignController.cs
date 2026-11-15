@@ -289,6 +289,7 @@ namespace Nuclearstasi.Plugin.Campaign
             territoryTimer = aggressionTimer = reinforcementTimer = autosaveTimer = 0;
             consecutiveFailures = 0;
             expectedAirbaseCount = CountAirbases();
+            Commands.NsCommand.Register();
             Active = true;
             RefreshTerritory();
             log.LogInfo($"Activated: rebels={Rebels.faction.factionName}, occupiers={Occupiers.faction.factionName}, "

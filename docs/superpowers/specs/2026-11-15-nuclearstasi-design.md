@@ -163,6 +163,10 @@ Range 0–100.
 - **Decay:** −1 per 2 minutes.
 - **Floor:** `50 × rebel share of all sites`.
 - Tier changes are announced (e.g. "Occupation forces are now on HIGH ALERT").
+- v1 counts kills reported to the rebel HQ by players
+  (`FactionHQ.ReportKillAction`); kills by rebel AI do not raise aggression.
+- "Capture factory / depot" applies per factory or depot inside a captured
+  airbase, on top of the airbase's own +15.
 
 ### 4.4 Enemy commander
 
@@ -204,6 +208,8 @@ target so vanilla AI engages it naturally. Gameplay outcome is the same.
     (`AddWarheads`); AI aircraft there may carry nukes; players are warned.
 - **Captured warheads:** capturing a base holding warheads gives them to the
   rebels (vanilla). Config option `RebelsCanUseCapturedWarheads` (default `true`).
+- Until nuke convoys are implemented (Plan 3), nuclear weapons are fully
+  disabled in this mode.
 
 ### 4.6 Victory and defeat
 
@@ -219,10 +225,14 @@ target so vanilla AI engages it naturally. Gameplay outcome is the same.
 ## 5. Persistence
 
 - File: `BepInEx/config/Nuclearstasi/campaign.json` on the host.
-- Saved: ownership of every airbase/factory/depot; aggression; warheads per
-  base; rebel faction funds; each player's personal funds keyed by Steam ID;
-  unit supply stockpiles; capital unlocked flag; elapsed campaign time;
-  campaign status (active / won / lost); save format version.
+- Saved: ownership of every airbase (factories and depots inside an airbase
+  change hands with it); aggression; warheads per base; the **rebel
+  treasury** (rebel faction funds plus every connected rebel player's funds —
+  vanilla returns a leaving player's funds to the faction pool, so funds are
+  kept as one pool rather than per Steam ID); unit supply stockpiles; capital
+  unlocked flag; elapsed campaign time; campaign status (active / won / lost);
+  save format version. On load the treasury goes back into the rebel pool and
+  reaches players through vanilla's join allowance and excess-funds payout.
 - Not saved: units in the field. On reload, garrisons respawn from stockpiles;
   in-progress convoys and counter-attacks are cancelled.
 - Saved every 5 minutes and when the mission is quit.
