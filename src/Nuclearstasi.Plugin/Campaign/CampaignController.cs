@@ -12,6 +12,7 @@ namespace Nuclearstasi.Plugin.Campaign
     {
         private const double TerritoryRefreshSeconds = 5;
         private const double AggressionTickSeconds = 10;
+        private const int MaxConsecutiveFailures = 300;
 
         public static CampaignController Instance;
 
@@ -26,6 +27,8 @@ namespace Nuclearstasi.Plugin.Campaign
         private double aggressionTimer;
         private double reinforcementTimer;
         private double autosaveTimer;
+        private int consecutiveFailures;
+        private int expectedAirbaseCount;
 #pragma warning disable CS0414 // read by the Task 9 airbase-added handler
         private bool applying;
 #pragma warning restore CS0414
@@ -47,7 +50,14 @@ namespace Nuclearstasi.Plugin.Campaign
 
         public void OnMissionStarted(Mission mission)
         {
-            Deactivate();
+            if (Active)
+            {
+                OnMissionEnding();
+            }
+            else
+            {
+                Deactivate();
+            }
             if (mission == null || mission.Name == null
                 || !mission.Name.StartsWith(settings.Campaign.MissionPrefix, StringComparison.OrdinalIgnoreCase))
             {
@@ -92,7 +102,14 @@ namespace Nuclearstasi.Plugin.Campaign
                     pendingMission = null;
                     try
                     {
-                        Activate(mission);
+                        if (GameQueries.IsServer() && MissionManager.CurrentMission == mission)
+                        {
+                            Activate(mission);
+                        }
+                        else
+                        {
+                            log.LogInfo("Nuclearstasi activation dropped: mission changed or this machine is no longer the host");
+                        }
                     }
                     catch (Exception e)
                     {
@@ -114,10 +131,20 @@ namespace Nuclearstasi.Plugin.Campaign
             try
             {
                 Step(deltaSeconds);
+                consecutiveFailures = 0;
             }
             catch (Exception e)
             {
-                log.LogError("Campaign tick failed: " + e);
+                consecutiveFailures++;
+                if (consecutiveFailures == 1 || consecutiveFailures % MaxConsecutiveFailures == 0)
+                {
+                    log.LogError("Campaign tick failed: " + e);
+                }
+                if (consecutiveFailures >= MaxConsecutiveFailures)
+                {
+                    log.LogError("Nuclearstasi disabled for this mission after repeated errors");
+                    Deactivate();
+                }
             }
         }
 
@@ -125,6 +152,11 @@ namespace Nuclearstasi.Plugin.Campaign
         {
             if (!Active)
             {
+                return;
+            }
+            if (Rebels == null || Occupiers == null || CountAirbases() < expectedAirbaseCount)
+            {
+                log.LogWarning("Nuclearstasi: scene is unloading; keeping the last good save");
                 return;
             }
             try
@@ -195,6 +227,14 @@ namespace Nuclearstasi.Plugin.Campaign
                 log.LogError("Campaign save unreadable: " + load.Error);
                 Announcer.All(Messages.CorruptSave());
             }
+            if (resumed && !string.IsNullOrEmpty(load.State.MissionName)
+                && !string.Equals(load.State.MissionName, mission.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                log.LogWarning($"Saved campaign belongs to mission '{load.State.MissionName}', not '{mission.Name}'; staying inactive");
+                Announcer.All($"Nuclearstasi: the saved campaign belongs to mission '{load.State.MissionName}'. Use /ns new to start a new campaign for this mission.");
+                Deactivate();
+                return;
+            }
             State = resumed ? load.State : new CampaignState { MissionName = mission.Name };
             Aggression = new AggressionMeter(settings.Aggression, State.Aggression);
 
@@ -216,12 +256,24 @@ namespace Nuclearstasi.Plugin.Campaign
             Rebels.onAirbaseAdded += OnRebelAirbaseAdded;
 
             territoryTimer = aggressionTimer = reinforcementTimer = autosaveTimer = 0;
+            consecutiveFailures = 0;
+            expectedAirbaseCount = CountAirbases();
             Active = true;
             RefreshTerritory();
             log.LogInfo($"Activated: rebels={Rebels.faction.factionName}, occupiers={Occupiers.faction.factionName}, "
                 + $"sites={Territory.TotalSites}, rebelShare={Territory.RebelShare:0.00}, resumed={resumed}");
             Announcer.All(resumed ? Messages.CampaignResumed(Aggression.Tier) : Messages.CampaignStarted());
             SaveNow();
+        }
+
+        private static int CountAirbases()
+        {
+            int count = 0;
+            foreach (var _ in GameQueries.Airbases())
+            {
+                count++;
+            }
+            return count;
         }
 
         private void Deactivate()

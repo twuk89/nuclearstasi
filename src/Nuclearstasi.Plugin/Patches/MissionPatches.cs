@@ -8,7 +8,14 @@ namespace Nuclearstasi.Plugin.Patches
     {
         private static void Postfix()
         {
-            CampaignController.Instance?.OnMissionStarted(MissionManager.CurrentMission);
+            try
+            {
+                CampaignController.Instance?.OnMissionStarted(MissionManager.CurrentMission);
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogError("StartMissionPatch failed: " + e);
+            }
         }
     }
 
@@ -17,7 +24,14 @@ namespace Nuclearstasi.Plugin.Patches
     {
         private static void Prefix()
         {
-            CampaignController.Instance?.OnMissionEnding();
+            try
+            {
+                CampaignController.Instance?.OnMissionEnding();
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogError("UnloadMissionPatch failed: " + e);
+            }
         }
     }
 
@@ -26,7 +40,14 @@ namespace Nuclearstasi.Plugin.Patches
     {
         private static void Prefix(FactionHQ __instance)
         {
-            CampaignController.Instance?.OnFactionDestroyed(__instance);
+            try
+            {
+                CampaignController.Instance?.OnFactionDestroyed(__instance);
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogError("FactionHQDestroyPatch failed: " + e);
+            }
         }
     }
 }
